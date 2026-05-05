@@ -53,3 +53,29 @@ def process_sources(
     """
     for source in sources:
         yield from process_stream(source, query=query, output_format=output_format)
+
+
+def count_matches(
+    lines: Iterable[str],
+    query: Optional[Query] = None,
+) -> int:
+    """Count the number of log records that match the given query.
+
+    Useful for summary reporting without paying the cost of formatting.
+
+    Args:
+        lines: Raw text lines (e.g. from stdin or a file).
+        query: Optional Query object used to filter records.
+
+    Returns:
+        The number of parsed records that pass the filter.
+    """
+    count = 0
+    for raw in lines:
+        record = parse_line(raw)
+        if record is None:
+            continue
+        if query is not None and not matches_record(record, query):
+            continue
+        count += 1
+    return count
