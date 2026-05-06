@@ -82,7 +82,11 @@ def _scan(node: Any, term: str) -> bool:
 
 
 def matches_record(record: Dict[str, Any], query: Query) -> bool:
-    """Return True when a record satisfies every constraint in *query*."""
+    """Return True when a record satisfies every constraint in *query*.
+
+    Constraints are evaluated in short-circuit order: level first (cheapest),
+    then field equality checks, then the full-text search scan.
+    """
     return (
         matches_level(record, query)
         and matches_fields(record, query)
