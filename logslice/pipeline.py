@@ -1,81 +1,79 @@
-"""Pipeline: wire together parsing, filtering, and formatting for a stream of log lines."""
-
+"""Stream processing pipeline: parse → filter → format / aggregate."""
 from __future__ import annotations
 
-from typing import Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 
-from logslice.filter import matches_record
-from logslice.formatter import format_record
 from logslice.parser import parse_line
+from logslice.filter import matches_level, matches_fields, matches_search
+from logslice.formatter import format_record
+from logslice.aggregator import Aggregator
 from logslice.query import Query
+
+
+def _matches(record: Dict[str, Any], query: Optional[Query]) -> bool:
+    if query is None:
+        return True
+    if not matches_level(record, query.level):
+        return False
+    if query.fields and not matches_fields(record, query.fields):
+        return False
+    if query.search and not matches_search(record, query.search):
+        return False
+    return True
 
 
 def process_stream(
     lines: Iterable[str],
     query: Optional[Query] = None,
-    output_format: str = "pretty",
+    fmt: str = "pretty",
+    color: bool = True,
 ) -> Iterator[str]:
-    """Parse, filter, and format an iterable of raw log lines.
-
-    Args:
-        lines: Raw text lines (e.g. from stdin or a file).
-        query: Optional Query object used to filter records.
-        output_format: One of ``"pretty"`` or ``"json"``.
-
-    Yields:
-        Formatted strings for records that pass the filter.
-    """
-    for raw in lines:
-        record = parse_line(raw)
+    """Parse and filter lines, yielding formatted output strings."""
+    for line in lines:
+        record = parse_line(line)
         if record is None:
             continue
-        if query is not None and not matches_record(record, query):
-            continue
-        yield format_record(record, fmt=output_format)
+        if _matches(record, query):
+            yield format_record(record, fmt=fmt, color=color)
 
 
 def process_sources(
     sources: Iterable[Iterable[str]],
     query: Optional[Query] = None,
-    output_format: str = "pretty",
+    fmt: str = "pretty",
+    color: bool = True,
 ) -> Iterator[str]:
-    """Process multiple line sources (files, streams) through the same pipeline.
-
-    Records from all sources are interleaved in arrival order.
-
-    Args:
-        sources: An iterable of iterables, each yielding raw log lines.
-        query: Optional Query object used to filter records.
-        output_format: One of ``"pretty"`` or ``"json"``.
-
-    Yields:
-        Formatted strings for records that pass the filter.
-    """
+    """Process multiple line sources (e.g. open file handles) in order."""
     for source in sources:
-        yield from process_stream(source, query=query, output_format=output_format)
+        yield from process_stream(source, query=query, fmt=fmt, color=color)
 
 
 def count_matches(
     lines: Iterable[str],
     query: Optional[Query] = None,
 ) -> int:
-    """Count the number of log records that match the given query.
-
-    Useful for summary reporting without paying the cost of formatting.
-
-    Args:
-        lines: Raw text lines (e.g. from stdin or a file).
-        query: Optional Query object used to filter records.
-
-    Returns:
-        The number of parsed records that pass the filter.
-    """
-    count = 0
-    for raw in lines:
-        record = parse_line(raw)
+    """Return the number of records that match the query."""
+    total = 0
+    for line in lines:
+        record = parse_line(line)
         if record is None:
             continue
-        if query is not None and not matches_record(record, query):
+        if _matches(record, query):
+            total += 1
+    return total
+
+
+def aggregate_stream(
+    lines: Iterable[str],
+    query: Optional[Query] = None,
+    group_by: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Parse, filter, and aggregate a stream of lines into a summary dict."""
+    agg = Aggregator(group_by=group_by)
+    for line in lines:
+        record = parse_line(line)
+        if record is None:
             continue
-        count += 1
-    return count
+        if _matches(record, query):
+            agg.add(record)
+    return agg.summary()
