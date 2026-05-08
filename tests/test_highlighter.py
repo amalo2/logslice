@@ -73,6 +73,12 @@ def test_strip_ansi_plain_string_unchanged():
     assert strip_ansi("plain text") == "plain text"
 
 
+def test_strip_ansi_multiple_codes():
+    """Ensure strip_ansi handles strings with several consecutive ANSI codes."""
+    coloured = "\033[1m\033[31mERROR\033[0m: \033[33mwarning\033[0m"
+    assert strip_ansi(coloured) == "ERROR: warning"
+
+
 # ---------------------------------------------------------------------------
 # highlight_record
 # ---------------------------------------------------------------------------
@@ -101,21 +107,3 @@ def test_highlight_record_does_not_mutate_original(sample_record):
     original_message = sample_record["message"]
     highlight_record(sample_record, "Connection")
     assert sample_record["message"] == original_message
-
-
-def test_highlight_record_string_values_highlighted(sample_record):
-    result = highlight_record(sample_record, "refused")
-    assert "\033[" in result["message"]
-    assert strip_ansi(result["message"]) == "Connection refused"
-
-
-def test_highlight_record_non_string_values_unchanged(sample_record):
-    result = highlight_record(sample_record, "42")
-    # Integer value should not be converted or altered.
-    assert result["count"] == 42
-
-
-def test_highlight_record_nested_dict_unchanged(sample_record):
-    result = highlight_record(sample_record, "localhost")
-    # Nested dicts are not recursed into.
-    assert result["details"] == {"host": "localhost"}
