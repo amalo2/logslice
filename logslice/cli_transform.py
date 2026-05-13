@@ -70,9 +70,11 @@ def run_transform(args: argparse.Namespace) -> int:
     add = {k: v for k, v in args.add}
     field_transforms = {field: tr for field, tr in args.apply}
 
+    skipped = 0
     for raw in _iter_lines(args.files):
         record = parse_line(raw.rstrip("\n"))
         if record is None:
+            skipped += 1
             continue
         result = transform_record(
             record,
@@ -82,6 +84,10 @@ def run_transform(args: argparse.Namespace) -> int:
             field_transforms=field_transforms or None,
         )
         sys.stdout.write(json.dumps(result) + "\n")
+
+    if skipped:
+        print(f"Warning: skipped {skipped} non-JSON line(s).", file=sys.stderr)
+
     return 0
 
 
