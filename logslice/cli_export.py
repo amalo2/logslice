@@ -72,8 +72,11 @@ def _iter_records(sources: list[str], queries: list[str]):
             yield from sys.stdin
             return
         for path in sources:
-            with open(path, encoding="utf-8", errors="replace") as fh:
-                yield from fh
+            try:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    yield from fh
+            except OSError as exc:
+                print(f"logslice export: cannot open '{path}': {exc}", file=sys.stderr)
 
     for raw in _lines():
         record = parse_line(raw.rstrip("\n"))
@@ -96,6 +99,10 @@ def run_export(args: argparse.Namespace) -> int:
     if args.output == "-":
         print(output)
     else:
-        Path(args.output).write_text(output, encoding="utf-8")
+        try:
+            Path(args.output).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"logslice export: cannot write '{args.output}': {exc}", file=sys.stderr)
+            return 1
 
     return 0
